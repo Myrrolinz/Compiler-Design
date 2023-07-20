@@ -1,15 +1,47 @@
-# 2022lab4-Skeleton
-For 2022Fall NKUCS Course - Principle of Compilers Lab4
+# Parser
+## Requirements
+- The design of the grammar tree data structure: the design of node types, the information that different types of nodes should save.
+- Extend context-free grammar and design translation mode.
+- Design the Yacc program to realize the parser that can construct the syntax tree.
+- Output the syntax tree structure in text mode to verify the correctness of the syntax analyzer.
 
-> Author: Emanual20
-> 
-> Date: 2021/10/16
+## For 2022Fall NKUCS Course - Principle of Compilers Lab5
 
-目前使用方式：
+## 编译器命令
+```
+Usage：build/compiler [options] infile
+Options:
+    -o <file>   Place the output into <file>.
+    -t          Print tokens.
+    -a          Print abstract syntax tree.
+```
 
-- make testlabfour: 编译lexer.l，测试test/lab4下所有sy文件。注意需要解注释ONLY_FOR_LEX宏定义，测试文件要以sy结尾。
-- make cleanlabfour: 清理编译出的二进制文件及测试结果。
+## Makefile使用
 
-目前只给出了lexer.l的框架，parser.y, SymbolTable.\[cpp|h\], Ast.\[cpp|h\], Type.\[cpp|h\] 在下次给出。
+* 编译：
+```
+    make
+```
+编译出我们的编译器。
 
-学有余力的同学，鼓励一次性完成语法分析(框架见lab5分支)，对理解该过程更具有连贯性。 
+* 运行：
+```
+    make run
+```
+以example.sy文件为输入，输出相应的语法树到example.ast文件中。
+
+* 测试：
+```
+    make testlab5
+```
+该命令会默认搜索test目录下所有的.sy文件，逐个输入到编译器中，生成相应的抽象语法树.ast文件到test目录中。你还可以指定测试目录：
+```
+    make testlab5 TEST_PATH=dirpath
+```
+
+* 清理:
+```
+    make clean
+```
+清除所有可执行文件和测试输出。
+
