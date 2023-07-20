@@ -1,17 +1,31 @@
 #include "Type.h"
 #include <sstream>
 
-IntType TypeSystem::commonInt = IntType(4);
+IntType TypeSystem::commonInt = IntType(32);
+IntType TypeSystem::commonBool = IntType(1);
 VoidType TypeSystem::commonVoid = VoidType();
 ConstType TypeSystem::commonConst = ConstType(4);
 
+
 Type* TypeSystem::intType = &commonInt;
 Type* TypeSystem::voidType = &commonVoid;
+Type* TypeSystem::boolType = &commonBool;
 Type* TypeSystem::constType = &commonConst;
 
-std::string IntType::toStr()
+
+std::string IntType::toStr() {
+    std::ostringstream buffer;
+    if (constant)
+        buffer << "i";
+    else
+        buffer << "i";
+    buffer << size;
+    return buffer.str();
+}
+
+std::string ConstType::toStr()
 {
-    return "int";
+    return "constant";
 }
 
 std::string VoidType::toStr()
@@ -19,15 +33,22 @@ std::string VoidType::toStr()
     return "void";
 }
 
-std::string ConstType::toStr()
-{
-    return "const";
-}
-
 std::string FunctionType::toStr()
 {
     std::ostringstream buffer;
-    buffer << returnType->toStr() << "()";
+    buffer << returnType->toStr();// << "()";012
     return buffer.str();
+    // if(returnType->isVoid()){
+    //     return "void()";
+    // }
+    // else{
+    //     return "int()";
+    // }
 }
 
+std::string PointerType::toStr()
+{
+    std::ostringstream buffer;
+    buffer << valueType->toStr() << "*";
+    return buffer.str();
+}

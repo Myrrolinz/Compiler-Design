@@ -1,17 +1,20 @@
 %code top{
     #include <iostream>
     #include <assert.h>
+    #include <string>
     #include "parser.h"
     extern Ast ast;
     int yylex();
-    int yyerror( char const * );
+    int yyerror( char const * );   
 }
-%code requires {
+
+%code requires {  
+    #include "Function.h"
     #include "Ast.h"
     #include "SymbolTable.h"
     #include "Type.h"
 }
-%define parse.error verbose
+
 %union {
     int itype;
     char* strtype;
@@ -19,613 +22,814 @@
     ExprNode* exprtype;
     Type* type;
 }
-%start Program
-%token <strtype> ID
-%token <strtype> STRING
-%token <itype> INTEGER OCT HEX
+
+%start Program//开始符号
+//定义终结符
+%token <strtype> ID  PUTF STRING
+
+%token <itype> INTEGER
 %token IF ELSE
 %token INT VOID
-%token LPAREN RPAREN LBRACE RBRACE LBRACK RBRACK SEMICOLON
-%token ADD SUB OR AND LESS LARGE ASSIGN XOR MUL DIV MOD LARAND LESAND NOT
-%token DECIMIAL WHILE BREAK CONTINUE CONST
-%token EQU NOEQU
+%token LPAREN RPAREN LBRACE RBRACE SEMICOLON
+//LPAREN RPAREN是小括号  LBRACE RBRACE是大括号
+%token ADD SUB OR AND LESS ASSIGN NOT
 %token RETURN
-%token <strtype> PUTF
-%token COMMA
-%nterm <stmttype> Stmts Stmt InvalidStmt AssignStmt BlockStmt IfStmt ReturnStmt DeclStmt FuncDef WhileStmt STREAM ContrStmt ConstDecl VarDecl
-%nterm <exprtype> Exp AddExp ConstExp MulExp Cond LOrExp LXorExp PrimaryExp FuncUtil EqExp LVal RelExp LAndExp str Arrayidentifier UnaryExp Const_Array Decl_varlva Var_Array constInstructions constInstruction InitVal InitValList FuncArraylist varInstructions varInstruction funcFParams funcFParam Rea_funcParams
-%nterm <type> Type
-%precedence THEN
+
+//下面是添加的终结符
+%token NEW ENUM DELETE CONST  BREAK  CONTINUE WHILE  
+%token EQ  GTR  NEQ LEQ GEQ  MUL DIV REM COMMA COLON DQUA SQUA
+%token LBRACK  RBRACK 
+%token DECIMIAL OCTAL_DECIMIAL HEX_DECIMAL
+
+//LBRACK  RBRACK 是中括号 
+
+
+//nterm 下面修饰非终结符
+%nterm <stmttype> Stmts Stmt AssignStmt BlockStmt IfStmt ReturnStmt DeclStmt FuncDef  putsFunc
+%nterm <exprtype> Exp AddExp Cond LOrExp PrimaryExp LVal RelExp LAndExp  Factor constIdlist  constId varIdlist
+%nterm <exprtype>varId varlval PutInchars
+
+%nterm <type> Type 
+//下面是添加的非终结符 FuncAddExp
+%nterm  <stmttype> Whilestmt     ConstDeclstmt   
+
+%nterm  <stmttype>   ADDstmt Emptystmt VarDeclStmt
+//单目运算符   
+%nterm <exprtype>     Paramlist Params Param   FuncCallExp UnaryExp
+%precedence THEN 
 %precedence ELSE
 %%
+
+//下面开始定义产生式 以及相应的动作
 Program
     : Stmts {
-        ast.setRoot($1);
+        ast.setRoot($1);//设置分析树的root
     }
     ;
+    
 Stmts
-    : Stmts Stmt
-    {
-        $$ = new SeqNode($1, $2);//seqNode，我们每一个节点块中存在的stmt的数量-1。反复生成stmt
+    : Stmt {
+        int rt=0;//0表示void  1表示int
+        //这里需要默认化为void 因为有可能没有return语句
+        if(static_cast<ReturnStmt*>($1)->getrt()==1)
+        {
+            rt=1;
+        }
+        if(static_cast<IfStmt*>($1)->getrt()==1)
+        {
+            rt=1;
+        }
+        if(static_cast<IfElseStmt*>($1)->getrt()==1)
+        {
+            rt=1;
+        }
+    //$$=$1;
+    $$ = new SeqNode($1,rt);//构造函数
+    
     }
-    |Stmt {$$=$1;}
+    | Stmts Stmt{
+        int rt=0;//0表示void  1表示int
+        if(static_cast<ReturnStmt*>($2)->getrt()==1)
+        {
+            rt=1;
+        }
+        if(static_cast<IfStmt*>($2)->getrt()==1)
+        {
+            rt=1;
+        }
+        if(static_cast<IfElseStmt*>($2)->getrt()==1)
+        {
+            rt=1;
+        }
+        //fprintf(stderr, "当前rt %d\n",rt);
+        $$ = new SeqNode($1, $2, rt);//构造函数
+        //$$ = new SeqNode($1, $2);//构造函数
+    }
     ;
 Stmt
-    : AssignStmt {$$=$1;}
+    : 
+    AssignStmt {$$=$1;}
+    | ADDstmt {$$=$1;}
     | BlockStmt {$$=$1;}
     | IfStmt {$$=$1;}
     | ReturnStmt {$$=$1;}
     | DeclStmt {$$=$1;}
     | FuncDef {$$=$1;}
-    | STREAM {$$=$1;}
-    | WhileStmt {$$=$1;}
-    | ContrStmt {$$=$1;}
-    | InvalidStmt {$$=$1;}
-    ;
-//数组非定义声明 
-//右值使用临时符号表表项存储
-Arrayidentifier
-    // a[exp] 左值
-    : ID LBRACK Exp RBRACK{
-        SymbolEntry *sp;
-        sp = identifiers->lookup($1);
-        if(sp == nullptr)
-        {
-            fprintf(stderr, "identifier \"%s\" is undefined\n", (char*)$1);
-            delete [](char*)$1;
-            assert(sp != nullptr);
-        }
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Array(se,new Id(sp),$3);
-    }
-    //a[exp1][exp1]
-    | Arrayidentifier LBRACK Exp RBRACK{
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Array(se,$1,$3);
-    }
-    | ID LBRACK RBRACK {
-       SymbolEntry *sp;
-        sp = identifiers->lookup($1);
-        if(sp == nullptr)
-        {
-            fprintf(stderr, "identifier \"%s\" is undefined\n", (char*)$1);
-            delete [](char*)$1;
-            assert(sp != nullptr);
-        }
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Array(se,new Id(sp));
-    }
-    ;
-LVal//左值，非定义申明用变量
-    : ID {
-        SymbolEntry *se;
-        se = identifiers->lookup($1);
-        if(se == nullptr)
-        {
-            fprintf(stderr, "identifier \"%s\" is undefined\n", (char*)$1);
-            delete [](char*)$1;
-            assert(se != nullptr);
-        }
-        $$ = new Id(se);
-        delete []$1;
-    }
-    | Arrayidentifier{$$=$1;}
-    ;
-STREAM //没有用上
+    | putsFunc {$$=$1;}
+    | Whilestmt {$$=$1;}
+    | Emptystmt   {$$=$1;}
+;
+
+//下面是添加的stmt
+Whilestmt //while(cond) stmt
     :
-    PUTF LPAREN str COMMA Rea_funcParams RPAREN SEMICOLON { 
-        SymbolEntry *se;
-        se = identifiers->lookup($1);
-        if(se == nullptr)
-        {
-            fprintf(stderr, "Function \"%s\" is undefined\n", (char*)$1);
-            delete [](char*)$1;
-            assert(se != nullptr);
-        }
-        $$ = new STREAM(new Id(se),$3,$5);
-    }
-    |
-    PUTF LPAREN str RPAREN SEMICOLON {
-        SymbolEntry *se;
-        se = identifiers->lookup($1);
-        if(se == nullptr)
-        {
-            fprintf(stderr, "Function \"%s\" is undefined\n", (char*)$1);
-            delete [](char*)$1;
-            assert(se != nullptr);
-        }
-        $$ = new STREAM(new Id(se),$3);
-    }
-    ;
-InvalidStmt
-    :
-    SEMICOLON {
-        $$ =new InvalidStmt();
-    }
-    | Exp SEMICOLON {
-        $$ = new InvalidStmt($1);
-    }
-    ;
-ContrStmt
-    :
-    CONTINUE SEMICOLON {$$ = new Contr(1);}
-    |
-    BREAK SEMICOLON {$$ = new Contr(2);}
-    ;
-str
-    :
-    STRING
+    WHILE LPAREN Cond RPAREN Stmt
     {
-        SymbolEntry *se;
-        se = new IdentifierSymbolEntry(TypeSystem::voidType, $1, identifiers->getLevel());
-        identifiers->install($1, se);
-        $$ = new String(se);
-        delete []$1;
+        $$=new Whilestmt($3,$5);
     }
     ;
-AssignStmt
+
+Emptystmt//空语句;
     :
-    LVal ASSIGN Exp SEMICOLON {
-        $$ = new AssignStmt($1, $3);
+    SEMICOLON
+    {
+        $$=new Emptystmt;//加处理语言就会报错
     }
-    ;
-BlockStmt
-    :   LBRACE
-        {identifiers = new SymbolTable(identifiers);}
-        Stmts RBRACE
+
+;
+
+BlockStmt   //{stmts}
+    :   LBRACE //作用域开始 定义当前作用域符号表
         {
-            $$ = new CompoundStmt($3);
+        //fprintf(stderr, "block断点1\n");
+        identifiers = new SymbolTable(identifiers);
+        } 
+        Stmts RBRACE 
+        {//这是一个作用域结束 当前符号表删除 指针前移
+            //fprintf(stderr, "block断点2\n");
+            if(static_cast<SeqNode*>($3)->getrt()==0)
+            {
+                //fprintf(stderr, "block断点3\n");
+                $$ = new CompoundStmt($3,0);
+            }
+            else
+            {
+                $$ = new CompoundStmt($3,1);
+            }
             SymbolTable *top = identifiers;
             identifiers = identifiers->getPrev();
             delete top;
         }
-        |
-        LBRACE
-        RBRACE
-        {
-            $$ = new CompoundStmt();
-        }
+    |
+    LBRACE  RBRACE  //{}空语句块
+    {
+        $$ = new CompoundStmt(0);
+    }
     ;
+
 IfStmt
-    : IF LPAREN Cond RPAREN Stmt %prec THEN {//%prec 关键字，将终结符then 的优先级赋给产生式。
-        $$ = new IfStmt($3, $5);
+    : IF LPAREN Cond RPAREN Stmt %prec THEN {//if(cond)  stmt;
+        int st=0;
+        if(static_cast<ReturnStmt*>($5)->getrt()==1)
+            {
+                st=1;
+            }
+    
+        $$ = new IfStmt($3, $5,st);
     }
-    | IF LPAREN Cond RPAREN Stmt ELSE Stmt {
-        $$ = new IfElseStmt($3, $5, $7);
+    | IF LPAREN Cond RPAREN Stmt ELSE Stmt {//if(cond)  stmt; else   stmt;
+        int st=0;
+        if(static_cast<ReturnStmt*>($7)->getrt()==1)
+            {
+            //fprintf(stderr, "断点2\n");
+                st=1;
+            }
+        $$ = new IfElseStmt($3, $5, $7,st);
+        // fprintf(stderr, "此时st %d\n",st);
     }
     ;
-WhileStmt
-    : WHILE LPAREN Cond RPAREN Stmt {
-        $$ = new WhileStmt($3, $5);
-    }
-    ;
+    
 ReturnStmt
     :
-    RETURN Exp SEMICOLON {
-        $$ = new ReturnStmt($2);
+    RETURN AddExp SEMICOLON //return xxx;
+    {
+        $$ = new ReturnStmt($2,1);
+        //fprintf(stderr, "return断点2\n");
     }
-    | RETURN SEMICOLON {
-        $$ = new ReturnStmt();
+   
+    |
+    RETURN  SEMICOLON   //return;
+    {
+        //fprintf(stderr, "return断点1\n");
+        $$ = new ReturnStmt(0);
+        //fprintf(stderr, "return断点2\n");
     }
     ;
-Exp// 变量表达式
+    
+ADDstmt:
+    AddExp SEMICOLON
+    {
+    $$ =new ADDstmt($1);
+    }
+;
+
+Exp
     :
     AddExp {$$ = $1;}
     ;
-ConstExp
-    :
-    AddExp {
-        $$=$1;
-    }
-    ;
-Cond// 条件表达式
+    
+Cond
     :
     LOrExp {$$ = $1;}
     ;
-UnaryExp
-    :
-    PrimaryExp {
-        $$ = $1;
-    }
-    | ADD UnaryExp {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new HitoExpr(se, HitoExpr::ADD, $2);
-    }
-    | SUB UnaryExp {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new HitoExpr(se, HitoExpr::SUB, $2);
-    }
-    | NOT UnaryExp {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new HitoExpr(se, HitoExpr::NOT, $2);
-    }
-    ;
+
 PrimaryExp
     :
-    LVal {
+    LVal {//左值
         $$ = $1;
     }
-    | INTEGER {
-        SymbolEntry *se = new ConstantSymbolEntry(TypeSystem::intType, $1);
-        $$ = new Constant(se,0);
+    | 
+    INTEGER {
+        SymbolEntry *se = new ConstantSymbolEntry(TypeSystem::constType, $1);
+        $$ = new Constant(se);
     }
-    | OCT {
-        SymbolEntry *se = new ConstantSymbolEntry(TypeSystem::intType, $1);
-        $$ = new Constant(se,2);
-    }
-    | HEX {
-        SymbolEntry *se = new ConstantSymbolEntry(TypeSystem::intType, $1);
-        $$ = new Constant(se,1);
-    }
-    | LPAREN Exp RPAREN{
+    |
+    LPAREN Exp RPAREN  {
         $$ = $2;
     }
-    | FuncUtil{
-        $$=$1;
+    |
+    FuncCallExp   {
+        $$ = $1;
     }
     ;
-AddExp// 加法级表达式
+    
+    
+AddExp
     :
-    MulExp {$$ = $1;}
-    |
-    AddExp ADD MulExp
+    AddExp ADD Factor
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::ADD, $1, $3);
     }
     |
-    AddExp SUB MulExp
+    AddExp SUB Factor
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::SUB, $1, $3);
     }
-    ;
-MulExp//乘法级表达式
-    :
-    UnaryExp {$$=$1;}
     |
-    MulExp MUL UnaryExp
+    Factor
+    {
+        $$ = $1;
+    }
+    ;
+
+    
+Factor:
+    UnaryExp {$$ = $1;}
+    |
+    Factor MUL UnaryExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::MUL, $1, $3);
     }
     |
-    MulExp DIV UnaryExp
+    Factor DIV UnaryExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::DIV, $1, $3);
     }
     |
-    MulExp MOD UnaryExp
+    Factor REM UnaryExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::MOD, $1, $3);
+        $$ = new BinaryExpr(se, BinaryExpr::REM, $1, $3);
+    }
+    ;  
+    
+UnaryExp
+    :
+    ADD  UnaryExp
+    {$$ = $2;}
+    |
+    SUB UnaryExp
+    {
+        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+        $$ = new UnaryExp(se, UnaryExp::SUB, $2);
+    }
+    |
+    NOT UnaryExp
+    {
+        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::boolType, SymbolTable::getLabel());
+        $$ = new UnaryExp(se, UnaryExp::NOT, $2);
+    }
+    |
+    PrimaryExp
+    {
+        $$ =$1;
     }
     ;
-//关系表达式 < > <= >=
-RelExp
+   
+
+RelExp//关系运算符
     :
     AddExp {$$ = $1;}
     |
+    //--------------------------逻辑运算
     RelExp LESS AddExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::LESS, $1, $3);
     }
     |
-    RelExp LARGE AddExp
+    RelExp GTR AddExp
     {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::LARGE, $1, $3);
-    }
-    |
-    RelExp LARAND AddExp
-    {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::LARAND, $1, $3);
-    }
-    |
-    RelExp LESAND AddExp
-    {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::LESAND, $1, $3);
-    }
+		SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+		$$ = new BinaryExpr(se, BinaryExpr::GTR, $1, $3);
+	}
+	|
+	RelExp EQ AddExp
+	{
+		SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+		$$ = new BinaryExpr(se, BinaryExpr::EQ, $1, $3);
+	}
+	|
+	RelExp NEQ AddExp
+	{
+		SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+		$$ = new BinaryExpr(se, BinaryExpr::NEQ, $1, $3);
+	}
+	|
+	RelExp GEQ AddExp
+	{
+		SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+		$$ = new BinaryExpr(se, BinaryExpr::GEQ, $1, $3);
+	}
+	|
+	RelExp LEQ AddExp
+	{
+		SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+		$$ = new BinaryExpr(se, BinaryExpr::LEQ, $1, $3);
+	}
     ;
-EqExp
+    
+LAndExp//AND
     :
     RelExp {$$ = $1;}
-    | EqExp EQU RelExp {SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::EQU, $1, $3);}
-    | EqExp NOEQU RelExp {SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::NOEQU, $1, $3);}
-LAndExp // 与表达式
-    :
-    EqExp {$$ = $1;}
     |
-    LAndExp AND EqExp
+    LAndExp AND RelExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::AND, $1, $3);
     }
     ;
-LXorExp //异或表达式
+
+LOrExp//OR
     :
     LAndExp {$$ = $1;}
     |
-    LXorExp XOR LAndExp
-    {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new BinaryExpr(se, BinaryExpr::XOR, $1, $3);
-    }
-    ;
-LOrExp //或表达式
-    :
-    LXorExp {$$ = $1;}
-    |
-    LOrExp OR LXorExp
+    LOrExp OR LAndExp
     {
         SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
         $$ = new BinaryExpr(se, BinaryExpr::OR, $1, $3);
     }
     ;
+
 Type
-    : INT {
+    : 
+    INT {
         $$ = TypeSystem::intType;
     }
     | VOID {
         $$ = TypeSystem::voidType;
     }
     ;
-Const_Array //常量数组
+
+ 
+AssignStmt
     :
-    ID LBRACK INTEGER RBRACK { //int ID[INT]
+    LVal ASSIGN Exp SEMICOLON {
+        $$ = new AssignStmt($1, $3);
+    }
+    ;    
+
+LVal//定义变量左值
+    : ID {
+        SymbolEntry *se;
+        se = identifiers->lookup($1);
+        if(se == nullptr)
+        {
+            fprintf(stderr, "identifier \"%s\" is undefined\n", (char*)$1);//此处已检查未定义问题
+            delete [](char*)$1;
+            assert(se != nullptr);
+        }
+        $$ = new Id(se);
+        delete []$1;
+    }
+    ;
+    
+    
+DeclStmt
+    : VarDeclStmt {$$=$1;}
+    |
+    ConstDeclstmt {$$=$1;}
+    ;
+
+//处理常量部分
+constIdlist   
+    : 
+    constIdlist COMMA constId {
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
+        $$=new Idlist(st,$1,$3);
+    }
+    |
+    constId {$$=$1;}
+    ;
+    
+ConstDeclstmt:
+    CONST Type constIdlist SEMICOLON
+    {
+        $$=new ConstDeclstmt($3);
+        
+        /*SymbolEntry *se=identifiers->search_inthis($3);
+        if(se!=NULL)
+        {
+            fprintf(stderr, "常量 \"%s\" is 重定义\n", (char*)$3);
+            delete [](char*)$3;
+            assert(se != nullptr);
+        }
+        SymbolEntry *se1;
+        se1 = new IdentifierSymbolEntry(TypeSystem::constType, $3, identifiers->getLevel());
+        identifiers->install($3, se1);
+        $$ = new ConstDeclstmt(new ConstId(se1));
+        delete []$3;*/
+    }
+    ;
+    
+constId//常量必须要赋予初值
+    : 
+    ID ASSIGN Exp{
         SymbolEntry *se;
         se = new IdentifierSymbolEntry(TypeSystem::constType, $1, identifiers->getLevel());
         identifiers->install($1, se);
-        SymbolEntry *sp = new ConstantSymbolEntry(TypeSystem::intType, $3);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
-        $$ = new Decl_Array(sg,new Id(se),new Constant(sp));
-        delete []$1;
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
+        $$=new DAssignStmt(st,new Id(se),$3);
     }
-    |
-    Const_Array LBRACK INTEGER RBRACK { //ID[INT][INT]...
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
-        SymbolEntry *sp = new ConstantSymbolEntry(TypeSystem::intType, $3);
-        $$ = new Decl_Array(se,$1,new Constant(sp));
+    ;    
+ 
+//处理变量部分
+VarDeclStmt
+    : Type varIdlist SEMICOLON{//int a,b,c,d;
+        $$=new VarDeclstmt($2);
     }
     ;
-Decl_varlva//用于变量声明 标识符/数组 a
+varIdlist
+    : varIdlist COMMA varId {
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+        $$=new Idlist(st,$1,$3);//可以和常量通用
+    }
+    | varId {$$=$1;}
+    ;
+    
+varId
+    : varlval {
+        $$ = $1;
+    }
+    | 
+    ID ASSIGN Exp{
+        SymbolEntry *se=identifiers->search_inthis($1);
+        //如果当前符号表中存在，报错
+        if(se!=NULL)
+        {
+            fprintf(stderr, "变量 \"%s\" is 重定义\n", (char*)$1);
+            delete [](char*)$1;
+            assert(se != nullptr);
+        }
+        
+        se = new IdentifierSymbolEntry(TypeSystem::intType, $1, identifiers->getLevel());
+        identifiers->install($1, se);
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+        $$=new DAssignStmt(st,new Id(se),$3);
+        delete []$1;
+
+    }
+    ;
+varlval
     :ID {
         SymbolEntry *se;
         se = new IdentifierSymbolEntry(TypeSystem::intType, $1, identifiers->getLevel());
         identifiers->install($1, se);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new Decl_id(sg,new Id(se));
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+        $$ = new Decvar(st,new Id(se));
         delete []$1;
     }
-    |
-    Var_Array {$$=$1;}
-    ;
-Var_Array //声明
-    :
-    ID LBRACK ConstExp RBRACK { //ID[constExp] int a[const]
-        SymbolEntry *se;
-        se = new IdentifierSymbolEntry(TypeSystem::intType, $1, identifiers->getLevel());
-        identifiers->install($1, se);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new Decl_Array(sg,new Id(se),$3);
-        delete []$1;
+//函数部分：--------------------------------------------------------------------
+
+//函数定义的参数列表
+Params:
+    Param 
+    {
+    //para_num+=1;
+    //fprintf(stderr,"miaomiaomiao\n");
+    def_fun.plus();
+    SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+    Param* tmp=static_cast<Param*>($1);
+    SymbolEntry *se1=tmp->getSymPtr();
+    Type* paratype =se1->getType();
+    
+    func_para.push(paratype);
+    $$ = new Params(st,$1,NULL);
+    
     }
     |
-    Var_Array LBRACK ConstExp RBRACK { //[const][const] id[][const]
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new Decl_Array(se,$1,$3);
-    }
-    |
-    ID LBRACK RBRACK{ //ID[]
-        SymbolEntry *se;
-        se = new IdentifierSymbolEntry(TypeSystem::intType, $1, identifiers->getLevel());
-        identifiers->install($1, se);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new Decl_Array(sg,new Id(se));
-        delete []$1;
-    }
-    ;
-DeclStmt
-    : ConstDecl {$$=$1;}
-    | VarDecl {$$=$1;}
-    ;
-ConstDecl //const int xxx,xxx,xxx ;
-    :CONST Type constInstructions SEMICOLON{
-        $$=new ConstDecl_stmt($3);
+    Params COMMA Param
+    {
+    SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+    Param* tmp=static_cast<Param*>($1);
+    SymbolEntry *se1=tmp->getSymPtr();
+    Type* paratype =se1->getType();
+    
+    //param_Type.push_back(paratype);
+    //para_num+=1;
+    
+    def_fun.plus();
+    func_para.push(paratype);
+    //fprintf(stderr,"!!!!!!\n");
+    $$ = new Params(se,$3,$1);//注意这里先放入param，从右向左入栈
+
     }
     ;
-constInstructions // a,b,c,d;
-    : constInstructions COMMA constInstruction {
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
-        constInstructions(sg,$1,$3);
+
+Param:
+    Type ID
+    {
+    SymbolEntry *se1=identifiers->search_inthis($2);
+    //fprintf(stderr,"ID is: %s\n", (char*)$2);
+        if(se1!=NULL)
+        {
+            fprintf(stderr, "参数 \"%s\" is 重定义\n", (char*)$2);
+            delete [](char*)$2;
+            assert(se1 != nullptr);
+        }
+    SymbolEntry *se2 = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+    SymbolEntry *se = new IdentifierSymbolEntry($1, $2, identifiers->getLevel());
+    
+    fprintf(stderr,"ID: %s getlabel: %d, getlevel: %d\n", (char*)$2, SymbolTable::getLabelnotInc(), identifiers->getLevel());
+    ast.AllFuncParams.push_back(SymbolTable::getLabelnotInc());
+    identifiers->install($2, se);//当前定义的函数是在上一个作用域的se:level=1
+    //identifiers->install($2, se2);//testtesttest
+    $$ = new Param(se2,new Id(se));//se2:label=3 se:level=1
+    //fprintf(stderr,"push_front: %s\n",se2->toStr().c_str());
+    fprintf(stderr,"param: %s done!\n",(char*)$2);
+    delete []$2;
+}
+;
+
+
+//函数调用的参数列表
+Paramlist:
+    Paramlist  COMMA Exp 
+    {
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+            
+        //use_num+=1;
+        call_fun.plus();
+        $$ =new Paramlist(st,$1,$3);
+
     }
-    | constInstruction {$$=$1;}
-    ;
-constInstruction
-    : 
-    ID ASSIGN ConstExp{ //a = 1+2;
-        SymbolEntry *se;
-        se = new IdentifierSymbolEntry(TypeSystem::constType, $1, identifiers->getLevel());
-        identifiers->install($1, se);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
-        $$=new Decl_Assign(sg,new Id(se),$3);
+    | 
+    Exp 
+    {
+        //use_num+=1;
+        SymbolEntry *st = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
+        call_fun.plus();
+        $$ =new Paramlist(st,$1,NULL);
     }
-    | Const_Array ASSIGN LBRACE InitValList RBRACE { //a[xx]={xxxxx}
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::constType, SymbolTable::getLabel());
-        $$=new Array_assign(sg,$1,$4);
-    }
-    ;
-//初始化数组常量 N维数组的N-1维的ValList
-InitVal
-    :
-    Exp {$$=$1;}
-    |
-    LBRACE RBRACE {//{}
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new InitVal(se);
-    }
-    |
-    LBRACE InitValList RBRACE { //{list}
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new InitVal(se,$2);
-    }
-    ;
-InitValList
-    :
-    InitVal {
-       SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new InitValList(se,$1);
-    }
-    |
-    InitValList COMMA InitVal {
-        SymbolEntry *se = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new InitValList(se,$1,$3);
-    }
-    ;
-VarDecl //int a=2,b=3,c;
-    : Type varInstructions SEMICOLON{
-        $$=new varDecl_stmt($2);
-    }
-    ;
-varInstructions
-    : varInstructions COMMA varInstruction {
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new constInstructions(sg,$1,$3);
-    }
-    | varInstruction {$$=$1;}
-    ;
-varInstruction
-    : Decl_varlva {
-        $$ = $1;
-    }
-    | ID ASSIGN Exp{ 
-        SymbolEntry *se;
-        se = new IdentifierSymbolEntry(TypeSystem::intType, $1, identifiers->getLevel());
-        identifiers->install($1, se);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Decl_Assign(sg,new Id(se),$3);
-    }
-    | Var_Array ASSIGN LBRACE InitValList RBRACE{ //a[xx]={xxxx}
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Array_assign(sg,$1,$4);
-    }
-    | Var_Array ASSIGN LBRACE RBRACE{
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Array_assign(sg,$1);
-    }
-    ;
+;
+
+
 FuncDef
     :
-    Type ID LPAREN RPAREN BlockStmt{ // int id(){ }
-        Type *funcType;
-        funcType = new FunctionType($1,{});
-        SymbolEntry *se = new IdentifierSymbolEntry(funcType, $2, identifiers->getLevel());
-        identifiers->install($2, se);
+    Type ID LPAREN //有参函数
+    {  
+        // para_num=0;//--------------重置参数个数
+        // fprintf(stderr, "断点1\n");
+        def_fun.reset();
+        func_para.reset();
+        //fprintf(stderr,"why!!!1\n");
+        //进入左括号 即进入新的作用域
         identifiers = new SymbolTable(identifiers);
-        se = identifiers->lookup($2);
-        assert(se != nullptr);
-        $$ = new FunctionDef(se, $5);
-        SymbolTable *top = identifiers;
-        identifiers = identifiers->getPrev();
-        delete top;
-        delete []$2;
+        
     }
-    | //int a(params){}
-    Type ID LPAREN{
-        Type *funcType;
-        funcType = new FunctionType($1,{});
-        SymbolEntry *se = new IdentifierSymbolEntry(funcType, $2, identifiers->getLevel());
-        identifiers->install($2, se);
-        identifiers = new SymbolTable(identifiers);
-    }
-    funcFParams RPAREN
+    Params  RPAREN   
     BlockStmt
     {
-        SymbolEntry *se;
-        se = identifiers->lookup($2);
-        assert(se != nullptr);
-        $$ = new FunctionDef(se, $7,$5);
+        // fprintf(stderr, "断点2\n");
+        //还需要把参数作用域释放
         SymbolTable *top = identifiers;
         identifiers = identifiers->getPrev();
         delete top;
+        //对函数进行定义
+        int num=def_fun.ret_num();
+        Type *funcType;
+        funcType = new FunctionType($1,func_para.get(),num);//由于有参数 要把参数列表 参数个数输入
+        SymbolEntry *se = new IdentifierSymbolEntry(funcType, $2, identifiers->getLevel());
+        identifiers->install($2, se);//当前定义的函数是在上一个作用域的
+        
+        //在这里判断函数返回类型和定义类型是否相同
+        SymbolEntry *se1;
+        se1 = identifiers->lookup($2);
+        
+        //fprintf(stderr, "  break 3\n");
+        int rt=static_cast<CompoundStmt*>($7)->getrt();
+        std::string return_t = se1->getType()->toStr();//这里有问题，return_t里是一堆奇怪的东西（返回指针了）
+        if(rt == 0)//void类型
+        {
+            if(return_t!="void")
+            {
+                // fprintf(stderr, "需要的返回值类型为 %s, 实际的返回值类型为 %d \n", return_t, rt);
+                fprintf(stderr, "int函数 %s 返回类型错误!\n", (char*)$2);
+                //fprintf(stderr, "rt %d \n", rt);
+                assert(rt!=0);
+            }
+        }
+        else{
+            //fprintf(stderr, "当前rt rt %d \n", rt);
+            if(return_t=="void")
+            {
+                // fprintf(stderr, "需要的返回值类型为 %s, 实际的返回值类型为 %d \n", return_t, rt);
+                fprintf(stderr, "void函数 %s 返回类型错误!\n", (char*)$2);
+                assert(rt!=1);
+            }
+        }
+        assert(se != nullptr);
+        $$ = new FunctionDef(se,$7,$5,func_para.get());
+      
         delete []$2;
+        // fprintf(stderr, "函数调用断点2\n");
+        //fprintf(stderr, "断点3\n");
+        //fprintf(stderr, "  break 1\n"); // 到此没问题
+    } 
+    |
+    Type ID LPAREN  {//无参函数
+        //进入左括号 即进入新的作用域 即便没有参数
+        identifiers = new SymbolTable(identifiers);
+    }
+    RPAREN {}
+    BlockStmt
+    {
+        //还需要把参数作用域释放
+        SymbolTable *top = identifiers;
+        identifiers = identifiers->getPrev();
+        delete top;
+        
+        Type *funcType;
+        funcType = new FunctionType($1,{});
+        SymbolEntry *se = new IdentifierSymbolEntry(funcType, $2, identifiers->getLevel());
+        identifiers->install($2, se);//当前定义的函数是在上一个作用域的
+        $$ = new FunctionDef(se,$7);
+               
+        int rt=static_cast<CompoundStmt*>($7)->getrt();
+        std::string return_t = se->getType()->toStr();
+        //fprintf(stderr, "断点3\n");
+        if(rt==0)
+        {
+            // fprintf(stderr, "rt %d \n", rt);
+            //fprintf(stderr, "rt %s \n", return_t.c_str());
+            if(return_t!="void()")
+            {
+                fprintf(stderr, "函数 %s 返回类型错误!\n", (char*)$2); 
+                assert(rt!=0);
+            }
+        }
+        else{
+            //fprintf(stderr, "rt %d \n", rt);
+            //fprintf(stderr, "rt %s \n", return_t.c_str());
+            if(return_t=="void()")
+            {
+                fprintf(stderr, "函数 %s 返回类型错误!\n", (char*)$2);
+                assert(rt!=1);
+            }
+        }
+        //fprintf(stderr, "断点4\n");
+        /*SymbolTable *top = identifiers;
+        identifiers = identifiers->getPrev();
+        delete top;*/
+
+        delete []$2;
+        //fprintf(stderr, "断点5\n");
+        
+        // fprintf(stderr, "  break 1\n"); // 到此没问题
     }
     ;
-funcFParams //int a,int b
+
+FuncCallExp
     :
-    funcFParam {$$ = $1;}
-    | funcFParams COMMA funcFParam {
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        funcFParams(sg,$1,$3);
+    ID   LPAREN  //有参函数
+    {
+        //fprintf(stderr, "函数调用 断点1");
+        call_fun.reset();
     }
-    ;
-//函数参数
-//首先生成一个临时函数表，用于存储函数声明中的参数
-funcFParam
-    :
-    Type ID{ // int b
-        SymbolEntry *se;
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        se = new IdentifierSymbolEntry($1, $2, identifiers->getLevel());
-        identifiers->install($2, se);
-        $$=new funcFParam(sg,new Id(se));
+    Paramlist    RPAREN  
+    {
+        //fprintf(stderr, "函数调用 断点1");
+        //调用函数时不用检查sysy运行时库的函数
+        if(($1) != (char*)"putf")
+        {  
+            SymbolEntry *se;
+            se = identifiers->lookup($1);
+            std::string name = dynamic_cast<IdentifierSymbolEntry*>(se)->get_name();
+            if(se == NULL)
+            {
+                fprintf(stderr, "函数 %s 没有声明 \n", (char*)$1);
+                delete [](char*)$1;
+                assert(se != NULL);
+            }
+            Type * tmp = se->getType();
+            FunctionType* temp = static_cast<FunctionType*>(tmp);
+            int cor_num = temp->getnum();//定义时候的参数个数(形参个数)
+            std::vector<Type*> cor_type=temp->get_vector_type();//形参类型参数类型
+            int paranum = call_fun.ret_num();//调用时函数个数(实参个数)
+            std::vector<Type*> para_type=func_para.get();//实参类型
+            if(cor_num != paranum)
+            {
+                fprintf(stderr, "函数调用 %s 输入参数错误\n", (char*)$1);
+                assert(cor_num == paranum);
+            }
+            else if(name != "putint" && name != "putch" && name != "getint" && name != "getch"){
+                for(int i = 0; i < cor_num; i++){
+                    if(cor_type[i]->isVoid() || para_type[i]->isVoid()){
+                        fprintf(stderr, "函数调用 %s 输入参数类型不匹配\n", (char*)$1);
+                        assert(cor_type==para_type);
+                    }
+                }
+            }    
+            
+            SymbolEntry *se1 = new TemporarySymbolEntry(se->getType(), SymbolTable::getLabel());
+            $$ = new FuncCallExp(se1,se,$4,cor_num);
+            //fprintf(stderr, "函数调用 断点2");
+        }
     }
     |
-    Type ID FuncArraylist{ //int a[]
-        SymbolEntry *se;
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        se = new IdentifierSymbolEntry($1, $2, identifiers->getLevel());
-        identifiers->install($2, se);
-        $$=new funcFParam(sg,new Id(se),$3);
+    ID   LPAREN   RPAREN  //无参函数
+    {
+        if(($1)!=(char*)"putf")
+        {  
+            SymbolEntry *se;
+            se = identifiers->lookup($1);
+            
+            if(se==NULL)
+            {
+                fprintf(stderr, "函数 %s 没有声明 \n", (char*)$1);
+                delete [](char*)$1;
+                assert(se != NULL);
+            }
+            //fprintf(stderr, "调用断点1 \n");
+            Type * tmp=se->getType();
+            FunctionType* temp=static_cast<FunctionType*>(tmp);
+            int cor_num=temp->getnum();//定义时候的参数个数
+            if(cor_num!=0)
+            {
+                fprintf(stderr, "函数调用 %s 输入参数错误\n", (char*)$1);
+                assert(cor_num==0);
+            
+            }
+            SymbolEntry *se1 = new TemporarySymbolEntry(se->getType(), SymbolTable::getLabel());
+            $$ = new FuncCallExp(se1,se,NULL,0);
+            // fprintf(stderr, "调用断点2 \n");
+        }
     }
-    ;
-FuncArraylist:
-    LBRACK RBRACK{ //a[]
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new FuncArraylist(sg);
+;
+
+//处理putint等函数
+PutInchars
+    :
+    STRING
+    {
+        SymbolEntry *se;
+        se = new IdentifierSymbolEntry(TypeSystem::voidType, $1, identifiers->getLevel());
+        identifiers->install($1, se);
+        $$ = new PutInchars(se);
+        delete []$1;
+    }
+    ;    
+
+putsFunc
+    :
+    PUTF LPAREN PutInchars COMMA Paramlist RPAREN SEMICOLON {
+        SymbolEntry *se;
+        se = identifiers->lookup($1);
+        if(se == nullptr)
+        {
+            fprintf(stderr, "Putint库函数 \"%s\" 未定义\n", (char*)$1);
+            delete [](char*)$1;
+            assert(se != nullptr);
+        }
+        $$ = new putsFunc(new Id(se),$3,$5);
     }
     |
-    FuncArraylist LBRACK Exp RBRACK { //a[xxx][exp]
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new FuncArraylist(sg,$1,$3);
-    }
-    ;
-//函数调用
-FuncUtil
-    :
-     ID LPAREN RPAREN { //id()
+    PUTF LPAREN PutInchars RPAREN SEMICOLON {
         SymbolEntry *se;
         se = identifiers->lookup($1);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new FuncUtil(sg,se);
-    }
-    | ID LPAREN Rea_funcParams RPAREN { //id(params)
-        SymbolEntry *se;
-        se = identifiers->lookup($1);
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$ = new FuncUtil(sg,se,$3);
-    }
-    ;
-Rea_funcParams//函数实参
-    :
-    Exp {
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$= new Rea_funcParam(sg,$1);
-    }
-    | Rea_funcParams COMMA Exp {
-        SymbolEntry *sg = new TemporarySymbolEntry(TypeSystem::intType, SymbolTable::getLabel());
-        $$=new Rea_funcParams(sg,$1,$3);
+        if(se == nullptr)
+        {
+            fprintf(stderr, "Putint库函数 \"%s\" 未定义\n", (char*)$1);
+            delete [](char*)$1;
+            assert(se != nullptr);
+        }
+        $$ = new putsFunc(new Id(se),$3);
     }
     ;
+
+    
 %%
+
 int yyerror(char const* message)
 {
     std::cerr<<message<<std::endl;
     return -1;
 }
+
+
+
+

@@ -5,7 +5,11 @@
 #include <map>
 
 class Type;
-
+class Operand;
+ 
+//表项基类  kind用于区分 变量 常量 中间变量
+//type保存int或者void类型  
+//toStr针对不同类型输出值
 class SymbolEntry
 {
 private:
@@ -13,14 +17,18 @@ private:
 protected:
     enum {CONSTANT, VARIABLE, TEMPORARY};
     Type *type;
-
+    int size;
 public:
     SymbolEntry(Type *type, int kind);
+    //SymbolEntry(FunctionType *type, int kind);
+    SymbolEntry(int kind);
     virtual ~SymbolEntry() {};
     bool isConstant() const {return kind == CONSTANT;};
     bool isTemporary() const {return kind == TEMPORARY;};
     bool isVariable() const {return kind == VARIABLE;};
     Type* getType() {return type;};
+    int getSize() const { return size; };
+    void setType(Type *type) {this->type = type;};
     virtual std::string toStr() = 0;
     // You can add any function you need here.
 };
@@ -37,12 +45,17 @@ class ConstantSymbolEntry : public SymbolEntry
 {
 private:
     int value;
-
+    std::string name;
+    int flag;
+    int scope;
+    enum {GLOBAL, PARAM, LOCAL};
 public:
     ConstantSymbolEntry(Type *type, int value);
+    ConstantSymbolEntry(Type *type, std::string name, int scope);
     virtual ~ConstantSymbolEntry() {};
     int getValue() const {return value;};
-    std::string toStr();
+    std::string toStr();//将value转换为字符串输出
+    int getScope() const {return scope;};
     // You can add any function you need here.
 };
 
@@ -73,16 +86,28 @@ class IdentifierSymbolEntry : public SymbolEntry
 {
 private:
     enum {GLOBAL, PARAM, LOCAL};
-    std::string name;
-    int scope;
+    std::string name;//变量名
+    int scope;//全局/参数/局部变量
+    Operand *addr;  // The address of the identifier. 变量地址
     // You can add any field you need here.
 
 public:
     IdentifierSymbolEntry(Type *type, std::string name, int scope);
+    IdentifierSymbolEntry(std::string name, int scope);
     virtual ~IdentifierSymbolEntry() {};
     std::string toStr();
+    bool isGlobal() const {return scope == GLOBAL;};
+    bool isParam() const {return scope == PARAM;};
+    bool isLocal() const {return scope == LOCAL;};
     int getScope() const {return scope;};
+    void setAddr(Operand *addr) {this->addr = addr;};
+    Operand* getAddr() {return addr;};
+    
     // You can add any function you need here.
+    // void increasescope(){scope++;}
+    std::string get_name(){return name;};
+    int use;//局部变量计数
+    int kput;//只有-1和0
 };
 
 
@@ -111,7 +136,8 @@ private:
 public:
     TemporarySymbolEntry(Type *type, int label);
     virtual ~TemporarySymbolEntry() {};
-    std::string toStr();
+    std::string toStr();//输出label
+    int getLabel() const {return label;};
     // You can add any function you need here.
 };
 
@@ -119,18 +145,21 @@ public:
 class SymbolTable
 {
 private:
-    std::map<std::string, SymbolEntry*> symbolTable;//符号表，每一个作用域一个符号表。存储在里面定义了的符合。
-    SymbolTable *prev;//指向包括其作用域的上一个作用域的符号表
-    int level;
-    static int counter;
+    std::map<std::string, SymbolEntry*> symbolTable;
+    SymbolTable *prev;
+    int level;// 控制缩进
+    static int counter;// 标识第n个符号表项
 public:
     SymbolTable();
     SymbolTable(SymbolTable *prev);
     void install(std::string name, SymbolEntry* entry);
     SymbolEntry* lookup(std::string name);
+    SymbolEntry* search_func();//
+    SymbolEntry* search_inthis(std::string name);//查找当前symbolTable中此name的entry
     SymbolTable* getPrev() {return prev;};
     int getLevel() {return level;};
     static int getLabel() {return counter++;};
+    static int getLabelnotInc() {return counter;};//dyt add
 };
 
 extern SymbolTable *identifiers;

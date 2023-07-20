@@ -2,27 +2,65 @@
 #define __AST_H__
 
 #include <fstream>
+#include "Operand.h"
 
 class SymbolEntry;
+class Unit;
+class Function;
+class BasicBlock;
+class Instruction;
+class IRBuilder;
+
+//条件 判断
+class if_iscond
+{
+public:
+    int is_cond;
+    if_iscond(){is_cond=0;};
+    int judge(){return is_cond;};
+};
+static if_iscond JUDGE;
 
 class Node
 {
 private:
     static int counter;//静态变量用于标识节点的序号
     int seq;//本节点的序号，我们每构造一个节点就往后+1
+protected:
+    std::vector<Instruction*> true_list;
+    std::vector<Instruction*> false_list;
+    static IRBuilder *builder;
+    void backPatch(std::vector<Instruction*> &list, BasicBlock*bb);
+    void unbackPatch(std::vector<Instruction*> &list, BasicBlock*bb);
+    std::vector<Instruction*> merge(std::vector<Instruction*> &list1, std::vector<Instruction*> &list2);
+
 public:
     Node();
     int getSeq() const {return seq;};
+    static void setIRBuilder(IRBuilder*ib) {builder = ib;};
     virtual void output(int level) = 0;
+    virtual void typeCheck() = 0;
+    virtual void genCode() = 0;
+    std::vector<Instruction*>& trueList() {return true_list;}
+    std::vector<Instruction*>& falseList() {return false_list;}
 };
+
 //表达式节点中存储了等式左侧的符号表表项，即a=b+c，ExprNode存储的就是a的符号表（包括kind和type）
 class ExprNode : public Node
 {
-protected:
-    SymbolEntry *symbolEntry;//符号表的表项
 public:
-    ExprNode(SymbolEntry *symbolEntry) : symbolEntry(symbolEntry){};
+    SymbolEntry *symbolEntry;
+    //注意继承类需要对dst进行初始化
+    Operand *dst;   // The result of the subtree is stored into dst.
+//public://dyt modify
+    ExprNode(SymbolEntry *symbolEntry) : symbolEntry(symbolEntry){
+        this->dst=new Operand(symbolEntry);
+    };
+    //ExprNode()  {};
+    Operand* getOperand() {return dst;};
+    SymbolEntry* getSymPtr() {return symbolEntry;};
 };
+
 //a=b+c,该BinaryExpr存储的就是右部b+c
 class BinaryExpr : public ExprNode
 {
@@ -30,270 +68,360 @@ private:
     int op;
     ExprNode *expr1, *expr2;
 public:
-    enum {ADD, SUB, MUL,DIV,AND, OR, XOR,LESS,LARGE,ASSIGN,MOD,EQU,NOEQU,LARAND,LESAND};
-    BinaryExpr(SymbolEntry *se, int op, ExprNode*expr1, ExprNode*expr2) : ExprNode(se), op(op), expr1(expr1), expr2(expr2){};
+    enum {ADD, MUL, DIV, REM, SUB, AND, OR, LESS, NEQ, LEQ, GEQ, EQ, GTR};
+    BinaryExpr(SymbolEntry *se, int op, ExprNode*expr1, ExprNode*expr2) : ExprNode(se), op(op), expr1(expr1), expr2(expr2){dst = new Operand(se);};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//单目
-class HitoExpr : public ExprNode
+
+//一元运算符
+class UnaryExp : public ExprNode
 {
 private:
     int op;
-    ExprNode *expr;
+    ExprNode *expr1;
 public:
-    enum {ADD, SUB,NOT};
-    HitoExpr(SymbolEntry *se, int op, ExprNode*expr) : ExprNode(se), op(op), expr(expr){};
+    enum {ADD, SUB, NOT};
+    UnaryExp(SymbolEntry *se, int op, ExprNode*expr1) : ExprNode(se), op(op), expr1(expr1){dst = new Operand(se);};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//---------------------------------------
+
 class Constant : public ExprNode
 {
-private:
-    int lvp; //0: decimal 1: hex 2: oct
 public:
-    Constant(SymbolEntry *se,int lvp=0) : ExprNode(se),lvp(lvp){};
+    Constant(SymbolEntry *se) : ExprNode(se){dst = new Operand(se);};
     void output(int level);
-};
-//--------------------------------------------
-
-class Parm : public ExprNode
-{
-
+    void typeCheck();
+    void genCode();
 };
 
 class Id : public ExprNode
 {
 public:
-    Id(SymbolEntry *se) : ExprNode(se){};
+    Id(SymbolEntry *se) : ExprNode(se){
+        SymbolEntry *temp = new TemporarySymbolEntry(se->getType(), SymbolTable::getLabel());
+        dst = new Operand(temp);
+        //fprintf(stderr,"in class id: %s\n",this->dst->toStr().c_str());
+    };
     void output(int level);
-};
-//数组 a[n]  id=a  expr1=n
-class Array :public ExprNode
-{
-private:
-    ExprNode* id;
-    ExprNode* expr1;
-public:
-    Array(SymbolEntry *se,ExprNode*id,ExprNode*expr1=nullptr):ExprNode(se),id(id),expr1(expr1){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class String : public ExprNode
+class ConstId : public ExprNode
 {
 public:
-    String(SymbolEntry *se) : ExprNode(se){};
+    ConstId(SymbolEntry *se) : ExprNode(se){SymbolEntry *temp = new TemporarySymbolEntry(se->getType(), SymbolTable::getLabel()); dst = new Operand(temp);};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-
 class StmtNode : public Node
 {
-
-
+    /*StmtNode(StmtNode *stmt=NULL) : stmt(stmt) {};
+    void output(int level);
+    void typeCheck();
+    void genCode();*/
 };
+
+/*
+class AssignExp : public ExprNode
+{
+private:
+    ExprNode *lval;
+    
+    ExprNode *expr;
+    
+public:
+    AssignExp(ExprNode *lval, ExprNode *expr) : lval(lval), expr(expr) {};
+   
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};*/
+//定义实数列表
+class Paramlist : public ExprNode
+{
+private:
+    ExprNode *exp1;
+    ExprNode *exp2;//应该是函数体
+public:
+    //Paramlist(ExprNode *exp1,ExprNode *exp2) : exp1(exp1), exp2(exp2) {};
+    Paramlist(SymbolEntry*se,ExprNode *exp1,ExprNode *exp2) :ExprNode(se), exp1(exp1), exp2(exp2) {};
+    //Paramlist(ExprNode *exp1): exp1(exp1), exp2(NULL){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+class FuncCallExp : public ExprNode
+{
+private:
+    Id *id;
+    SymbolEntry *st;
+    ExprNode *params;//应该是函数体
+    int param_num;//调用时输入的参数个数
+public:
+    
+    FuncCallExp(SymbolEntry*se,SymbolEntry*st,ExprNode *params=NULL,int param_num=0) :ExprNode(se), st(st),params(params),param_num(param_num){};
+    FuncCallExp(SymbolEntry*se,Id *id) : ExprNode(se),id(id),params(NULL){};
+    
+    
+    int getparam_num(){return param_num;};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+
+
 
 class CompoundStmt : public StmtNode
 {
 private:
     StmtNode *stmt;
+    int rt;
 public:
-    CompoundStmt(StmtNode *stmt=nullptr) : stmt(stmt) {};
+    CompoundStmt(StmtNode *stmt=NULL,int rt=1) : stmt(stmt),rt(rt) {};
+    int getrt(){return rt;};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
+
+
+
+
 
 class SeqNode : public StmtNode
 {
 private:
     StmtNode *stmt1, *stmt2;
+    int rt;
 public:
-    SeqNode(StmtNode *stmt1, StmtNode *stmt2) : stmt1(stmt1), stmt2(stmt2){};
+    //int rt;
+    SeqNode(StmtNode *stmt1, StmtNode *stmt2,int rt=1) : stmt1(stmt1), stmt2(stmt2),rt(rt){};
+    SeqNode(StmtNode *stmt1, int rt=1) : stmt1(stmt1), stmt2(NULL),rt(rt){};
+    int getrt(){return rt;};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//int a 声明ID
-class Decl_id : public ExprNode
+
+class ADDstmt : public StmtNode
+{
+private:
+    
+    
+    ExprNode *expr;
+    
+public:
+    ADDstmt(ExprNode *expr) : expr(expr) {};
+   
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+class ConstDecAndAssStmt : public StmtNode
+{
+private:
+    ConstId *id;
+    ExprNode *expr;
+    
+public:
+    ConstDecAndAssStmt(ConstId *id, ExprNode *expr) : id(id), expr(expr) {};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+class ConstDeclstmt : public StmtNode
+{
+private:
+    ExprNode* expr;
+public:
+    ConstDeclstmt(ExprNode* expr) : expr(expr){};
+    
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+
+class Idlist: public ExprNode
+{
+private:
+    ExprNode* expr1;
+    ExprNode* expr2;
+public:
+    Idlist(SymbolEntry *se,ExprNode* expr1,ExprNode* expr2):ExprNode(se),expr1(expr1),expr2(expr2){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+
+class VarDeclstmt: public StmtNode
+{
+private:
+    ExprNode* expr1;
+public:
+    VarDeclstmt(ExprNode* expr1):expr1(expr1){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+class Decvar : public ExprNode
 {
 private:
     Id *id;
 public:
-    Decl_id(SymbolEntry *se,Id *id):ExprNode(se),id(id){};
+    Decvar(SymbolEntry *se,Id *id):ExprNode(se),id(id){};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//int a=2; 定义
-class Decl_Assign : public ExprNode
+
+
+
+class DAssignStmt : public ExprNode
 {
 private:
     Id *id;
-    ExprNode *interger;
+    ExprNode *expr;
+    
 public:
-    Decl_Assign(SymbolEntry *se,Id *id,ExprNode* interger):ExprNode(se),id(id),interger(interger){};
+    DAssignStmt(SymbolEntry *se,Id *id, ExprNode *expr) :ExprNode(se), id(id), expr(expr) {};
     void output(int level);
-};
-// Array_id[interger] 声明数组
-class Decl_Array: public ExprNode
-{
-private:
-    ExprNode *Array_id;
-    ExprNode *interger;
-public:
-    Decl_Array(SymbolEntry *se,ExprNode* Array_id,ExprNode* interger=nullptr):ExprNode(se),Array_id(Array_id),interger(interger){};
-    void output(int level);
-};
-//Array_id[interger]=Initial 赋值
-class Array_assign: public ExprNode
-{
-private:
-    ExprNode* Array_id;
-    ExprNode* Initial;
-public:
-    Array_assign(SymbolEntry *se,ExprNode* Array_id,ExprNode* Initial=nullptr):ExprNode(se),Array_id(Array_id),Initial(Initial){};
-    void output(int level);
-};
-//初值表
-class InitValList: public ExprNode
-{
-private:
-    ExprNode* Array_id;
-    ExprNode* Initial;
-public:
-    InitValList(SymbolEntry *se,ExprNode* Array_id,ExprNode* Initial=nullptr):ExprNode(se),Array_id(Array_id),Initial(Initial){};
-    void output(int level);
-};
-//递归
-class constInstructions: public ExprNode
-{
-private:
-    ExprNode* preInstruct;
-    ExprNode* lastInstruct;
-public:
-    constInstructions(SymbolEntry *se,ExprNode* pre,ExprNode* last):ExprNode(se),preInstruct(pre),lastInstruct(last){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class varInstructions: public ExprNode
+class DeclStmt : public StmtNode
 {
 private:
-    ExprNode* preInstruct;
-    ExprNode* lastInstruct;
+    Id *id;
+    DAssignStmt *dassignStmt;//没用
 public:
-    varInstructions(SymbolEntry *se,ExprNode* pre,ExprNode* last):ExprNode(se),preInstruct(pre),lastInstruct(last){};
+    DeclStmt(Id *id) : id(id),dassignStmt(NULL){};
+    DeclStmt(Id *id,DAssignStmt *dassignStmt) : id(id),dassignStmt(dassignStmt)  {};
     void output(int level);
-};
-//数组赋值
-class InitVal: public ExprNode
-{
-private:
-    ExprNode* Initial; 
-    ExprNode* interger;
-public:
-    InitVal(SymbolEntry *se,ExprNode* Initial=nullptr,ExprNode* interger=nullptr):ExprNode(se),Initial(Initial),interger(interger){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class varDecl_stmt: public StmtNode
+class MVA : public StmtNode
 {
 private:
-    ExprNode* varInstruction;
+    Id *id;
+    StmtNode *ass;
+    
 public:
-    varDecl_stmt(ExprNode* varInstruction):varInstruction(varInstruction){};
+    MVA(Id *id) : id(id),ass(NULL){};
+    MVA(StmtNode *ass) : id(NULL),ass(ass){};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class funcFParam: public ExprNode
+class VA : public StmtNode
 {
 private:
-    Id* Param;
-    ExprNode* arry;
+    Id *id;
+    StmtNode *ass;
+    
 public:
-    funcFParam(SymbolEntry *se,Id *Param=nullptr,ExprNode* arry=nullptr):ExprNode(se),Param(Param){};
+    VA(Id *id) : id(id),ass(NULL){};
+    VA(StmtNode *ass) : id(NULL),ass(ass){};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class funcFParams: public ExprNode
+
+class VAs : public StmtNode
 {
 private:
-    ExprNode* prevParam;
-    ExprNode* lastParam;
+    StmtNode *va1;
+    StmtNode *va2;
+    
 public:
-    funcFParams(SymbolEntry *se,ExprNode *lastParam,ExprNode* prevParam=nullptr):ExprNode(se),prevParam(prevParam),lastParam(lastParam){};
+    //VAs(StmtNode *vas) : vas(vas),va(NULL){};
+    VAs(StmtNode *va) : va1(va),va2(NULL){};
+    VAs(StmtNode *va1,StmtNode *va2) : va1(va1),va2(va2)  {};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//数组 用作函数参数
-class FuncArraylist:public ExprNode
+class MVAs : public StmtNode
 {
 private:
-    ExprNode* empty;
-    ExprNode* Expr1;
+    StmtNode *va1;
+    StmtNode *va2;
+    
 public:
-    FuncArraylist(SymbolEntry *se,ExprNode *empty=nullptr,ExprNode* Expr1=nullptr):ExprNode(se),empty(empty),Expr1(Expr1){};
+    //VAs(StmtNode *vas) : vas(vas),va(NULL){};
+    MVAs(StmtNode *va) : va1(va),va2(NULL){};
+    MVAs(StmtNode *va1,StmtNode *va2) : va1(va1),va2(va2)  {};
     void output(int level);
-};
-//实参
-class Rea_funcParam: public ExprNode
-{
-private:
-    ExprNode* Param;
-public:
-    Rea_funcParam(SymbolEntry *se,ExprNode *Param):ExprNode(se),Param(Param){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class Rea_funcParams: public ExprNode
+
+
+
+
+class MULdecstmt : public StmtNode
 {
 private:
-    ExprNode* prevParam;
-    ExprNode* lastParam;
+    StmtNode *vas1;
+    StmtNode *vas2;
 public:
-    Rea_funcParams(SymbolEntry *se,ExprNode *lastParam,ExprNode* prevParam=nullptr):ExprNode(se),prevParam(prevParam),lastParam(lastParam){};
-    void output(int level);   
+    MULdecstmt(StmtNode *vas1,StmtNode *vas2) : vas1(vas1),vas2(vas2){};
+    //DeclStmt(Id *id,DAssignStmt *dassignStmt) : id(id),dassignStmt(dassignStmt)  {};
+    void output(int level);
+    void typeCheck();
+    void genCode();
 };
-//常量声明
-class ConstDecl_stmt: public StmtNode
+
+
+class MULconstdecstmt : public StmtNode
 {
 private:
-    ExprNode* constInstruction;
+    StmtNode *vas1;
+    StmtNode *vas2;
 public:
-    ConstDecl_stmt(ExprNode* constInstruction):constInstruction(constInstruction){};
+    MULconstdecstmt(StmtNode *vas1,StmtNode *vas2) : vas1(vas1),vas2(vas2){};
+    //DeclStmt(Id *id,DAssignStmt *dassignStmt) : id(id),dassignStmt(dassignStmt)  {};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class InvalidStmt :public StmtNode
-{
-private:
-    ExprNode* varInstruction;
-public:
-    InvalidStmt(ExprNode* varInstruction=nullptr):varInstruction(varInstruction){};
-    void output(int level);
-};
-
-class Invalidnana : public StmtNode //没用上
-{
-   private:
-    int op;
-    ExprNode *expr1, *expr2;
-public:
-    enum {ADD, SUB, MUL,DIV,AND, OR, XOR,LESS,LARGE,ASSIGN,MOD,EQU,NOEQU,LARAND,LESAND};
-    Invalidnana( int op, ExprNode*expr1, ExprNode*expr2) : op(op), expr1(expr1), expr2(expr2){};
-    void output(int level);
-
-};
 
 class IfStmt : public StmtNode
 {
 private:
     ExprNode *cond;
     StmtNode *thenStmt;
+    int rt;
 public:
-    IfStmt(ExprNode *cond, StmtNode *thenStmt) : cond(cond), thenStmt(thenStmt){};
+int getrt(){return rt;};
+    IfStmt(ExprNode *cond, StmtNode *thenStmt,int rt) : cond(cond), thenStmt(thenStmt),rt(rt){};
     void output(int level);
-};
-
-class WhileStmt : public StmtNode
-{
-private:
-    ExprNode *cond;
-    StmtNode *stmt;
-public:
-    WhileStmt(ExprNode *cond, StmtNode *Stmt) : cond(cond), stmt(Stmt){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
 class IfElseStmt : public StmtNode
@@ -302,19 +430,142 @@ private:
     ExprNode *cond;
     StmtNode *thenStmt;
     StmtNode *elseStmt;
+    int rt;
 public:
-    IfElseStmt(ExprNode *cond, StmtNode *thenStmt, StmtNode *elseStmt) : cond(cond), thenStmt(thenStmt), elseStmt(elseStmt) {};
+int getrt(){return rt;};
+    IfElseStmt(ExprNode *cond, StmtNode *thenStmt, StmtNode *elseStmt,int rt) : 
+    cond(cond), thenStmt(thenStmt), elseStmt(elseStmt),rt(rt) {};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
 class ReturnStmt : public StmtNode
 {
 private:
-    ExprNode *retValue;
+    //StmtNode *retValue;
+    ExprNode *retValue1;
+    int rt;
 public:
-    ReturnStmt(ExprNode*retValue=nullptr) : retValue(retValue) {};
+    //int rt;
+    ReturnStmt(int rt=1) : retValue1(NULL),rt(rt) {};
+    int getrt(){return rt;};
+    ReturnStmt(ExprNode*retValue1,int rt=1) : retValue1(retValue1),rt(rt) {};
     void output(int level);
+    void typeCheck();
+    void genCode();
 };
+
+
+class Whilestmt : public StmtNode
+{
+private:
+    ExprNode *Cond;
+    StmtNode *stmt;
+public:
+    Whilestmt(ExprNode *Cond, StmtNode *stmt) : Cond(Cond), stmt(stmt) {};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+//定义形参列表
+class Params : public ExprNode
+{
+private:
+    ExprNode *exp1;
+    ExprNode *exp2;//应该是函数体
+public:
+    //Params(ExprNode *exp1,ExprNode *exp2) : exp1(exp1), exp2(exp2) {};
+   // Params(ExprNode *exp1): exp1(exp1), exp2(NULL){};
+    
+    Params(SymbolEntry *se1,ExprNode *exp1,ExprNode *exp2=NULL) :ExprNode(se1), exp1(exp1), exp2(exp2) {};
+    //Params(): exp1(NULL), exp2(NULL){};
+    ExprNode* getNextParam(){return exp1;};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+class Param : public ExprNode
+{
+private:
+    Id *id;
+    ExprNode* expr1;
+public:
+    Param(SymbolEntry *se1,Id *id,ExprNode* expr1=NULL) : ExprNode(se1),id(id),expr1(expr1) {};
+    
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+class FunctionDef : public StmtNode
+{
+private:
+    SymbolEntry *se;
+    StmtNode *stmt;//应该是函数体
+    ExprNode* params;
+    int paranum;//定义时的参数个数
+    std::vector<Type*> params_type;
+public:
+    FunctionDef(SymbolEntry *se, StmtNode *stmt,ExprNode* params=NULL,std::vector<Type*> params_type={}):se(se), stmt(stmt),params(params),params_type(params_type){};
+    
+
+    //FunctionDef(SymbolEntry *se, ExprNode* params,StmtNode *stmt) : se(se), stmt(stmt),params(params){};
+    //FunctionDef(SymbolEntry *se, StmtNode *stmt) : se(se), stmt(stmt),params(NULL){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+    
+     SymbolEntry * getSym(){return se;};
+    std::vector<Type*> get_params(){return params_type;};
+};
+
+class Funcname : public StmtNode
+{
+private:
+    Id *id;
+    
+public:
+    Funcname(Id *id) : id(id){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+class FuncCall : public StmtNode
+{
+private:
+    ExprNode* expr;
+    StmtNode *id;
+    Paramlist *params;//应该是函数体
+public:
+    FuncCall(StmtNode *id,Paramlist *params) : id(id),params(params){};
+    FuncCall(StmtNode *id) : id(id),params(NULL){};
+    FuncCall(ExprNode *expr):expr(expr){};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
+
+class Emptystmt : public StmtNode
+{
+private:
+    ExprNode* varInstruction;
+    
+public:
+    
+    Emptystmt(ExprNode* varInstruction=NULL):varInstruction(varInstruction)  {};
+    void output(int level);
+    void typeCheck();
+    void genCode();
+};
+
 
 class AssignStmt : public StmtNode
 {
@@ -323,61 +574,33 @@ private:
     ExprNode *expr;
 public:
     AssignStmt(ExprNode *lval, ExprNode *expr) : lval(lval), expr(expr) {};
+    AssignStmt(ExprNode *expr) : lval(NULL), expr(expr) {};
     void output(int level);
-};
-// 函数定义
-class FunctionDef : public StmtNode
-{
-private:
-    SymbolEntry *se;
-    StmtNode *stmt;
-    ExprNode* funcFParams;
-public:
-    FunctionDef(SymbolEntry *se, StmtNode *stmt,ExprNode* funcFParams=nullptr):se(se), stmt(stmt),funcFParams(funcFParams){};
-    void output(int level);
+    void typeCheck();
+    void genCode();
 };
 
-class FuncUtilStmt: public StmtNode // 这个没用上
-{
-private: 
-    ExprNode* functuil;
-public:
-    FuncUtilStmt(ExprNode* functuil):functuil(functuil){};
-    void output(int level);
-};
-// 函数调用
-class FuncUtil : public ExprNode
+class putsFunc : public StmtNode
 {
 private:
-    SymbolEntry *se;
-    ExprNode * parms;
+    ExprNode* expr1;
+    ExprNode *expr2;
+    ExprNode* expr3;
 public:
-    FuncUtil(SymbolEntry *sp,SymbolEntry *se,ExprNode *parms=nullptr):ExprNode(sp),se(se),parms(parms){};
+    putsFunc(ExprNode* expr1,ExprNode* expr2,ExprNode* expr3=nullptr):expr1(expr1),expr2(expr2),expr3(expr3){};
     void output(int level);
+    void genCode();
+    void typeCheck();
 };
-// 输入输出流
-class STREAM : public StmtNode
+class PutInchars : public ExprNode
 {
-private:
-    ExprNode* putf; //函数名
-    ExprNode *string; 
-    ExprNode* funcFParams;
 public:
-    STREAM(ExprNode* putf,ExprNode* string,ExprNode* funcFParams=nullptr):putf(putf),string(string),funcFParams(funcFParams){};
+    PutInchars(SymbolEntry *se) : ExprNode(se){};
     void output(int level);
+    void genCode();
+    void typeCheck();
 };
-
-//continue or break
-class Contr : public StmtNode
-{
-private:
-    int lvp; // 1: continue 2: break
-    ExprNode *retValue;
-public:
-    Contr(int lvp,ExprNode *retValue=nullptr) : lvp(lvp){};
-    void output(int level);
-};
-
+#include<deque>
 class Ast
 {
 private:
@@ -386,6 +609,9 @@ public:
     Ast() {root = nullptr;}
     void setRoot(Node*n) {root = n;}
     void output();
+    void typeCheck();
+    void genCode(Unit *unit);
+    std::deque<int> AllFuncParams;//dyt add
 };
 
 #endif
