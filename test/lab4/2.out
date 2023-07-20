@@ -1,0 +1,120 @@
+[DEBUG LAB4]: 	linecomment	// i am a function: this function has many syntax errors.	linenum:1
+[DEBUG LAB4]: 	INT	int	linenum:3
+[DEBUG LAB4]: 	ID	f	linenum:3	IDcount:1
+[DEBUG LAB4]: 	LPAREN	(	linenum:3
+[DEBUG LAB4]: 	RPAREN	)	linenum:3
+[DEBUG LAB4]: 	LBRACE	{	linenum:3
+[DEBUG LAB4]: 	INT	int	linenum:4
+[DEBUG LAB4]: 	ID	a	linenum:4	IDcount:2
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:4
+[DEBUG LAB4]: 	ID	a	linenum:5	IDcount:2
+[DEBUG LAB4]: 	ASSIGN	=	linenum:5
+[DEBUG LAB4]: 	DECIMIAL	0	linenum:5
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:5
+[DEBUG LAB4]: 	WHILE	while	linenum:6
+[DEBUG LAB4]: 	LPAREN	(	linenum:6
+[DEBUG LAB4]: 	ID	a	linenum:6	IDcount:2
+[DEBUG LAB4]: 	LESS	<	linenum:6
+[DEBUG LAB4]: 	DECIMIAL	10	linenum:6
+[DEBUG LAB4]: 	RPAREN	)	linenum:6
+[DEBUG LAB4]: 	LBRACE	{	linenum:6
+[DEBUG LAB4]: 	ID	a	linenum:7	IDcount:3
+[DEBUG LAB4]: 	ASSIGN	=	linenum:7
+[DEBUG LAB4]: 	ID	a	linenum:7	IDcount:3
+[DEBUG LAB4]: 	STAR	*	linenum:7
+[DEBUG LAB4]: 	DECIMIAL	2345	linenum:7
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:7
+[DEBUG LAB4]: 	RBRACE	}	linenum:8
+[DEBUG LAB4]: 	RETURN	return	linenum:9
+[DEBUG LAB4]: 	ID	a	linenum:9	IDcount:2
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:9
+[DEBUG LAB4]: 	RBRACE	}	linenum:10
+[DEBUG LAB4]: 	INT	int	linenum:12
+[DEBUG LAB4]: 	ID	main	linenum:12	IDcount:4
+[DEBUG LAB4]: 	LPAREN	(	linenum:12
+[DEBUG LAB4]: 	RPAREN	)	linenum:12
+[DEBUG LAB4]: 	LBRACE	{	linenum:12
+[DEBUG LAB4]: 	INT	int	linenum:13
+[DEBUG LAB4]: 	ID	_testid	linenum:13	IDcount:5
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:13
+[DEBUG LAB4]: 	ID	_testid	linenum:14	IDcount:5
+[DEBUG LAB4]: 	ASSIGN	=	linenum:14
+[DEBUG LAB4]: 	DECIMIAL	0	linenum:14
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:14
+[DEBUG LAB4]: 	IF	if	linenum:15
+[DEBUG LAB4]: 	LPAREN	(	linenum:15
+[DEBUG LAB4]: 	ID	_testid	linenum:15	IDcount:5
+[DEBUG LAB4]: 	EQUAL	==	linenum:15
+[DEBUG LAB4]: 	DECIMIAL	0	linenum:15
+[DEBUG LAB4]: 	RPAREN	)	linenum:15
+[DEBUG LAB4]: 	LBRACE	{	linenum:15
+[DEBUG LAB4]: 	INT	int	linenum:16
+[DEBUG LAB4]: 	ID	_testid	linenum:16	IDcount:6
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:16
+[DEBUG LAB4]: 	INT	int	linenum:17
+[DEBUG LAB4]: 	ID	_testid2	linenum:17	IDcount:7
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:17
+[DEBUG LAB4]: 	ID	_testid1	linenum:18	IDcount:8
+[DEBUG LAB4]: 	ASSIGN	=	linenum:18
+[DEBUG LAB4]: 	ID	_testid1	linenum:18	IDcount:8
+[DEBUG LAB4]: 	ADD	+	linenum:18
+[DEBUG LAB4]: 	DECIMIAL	1	linenum:18
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:18
+[DEBUG LAB4]: 	RBRACE	}	linenum:19
+[DEBUG LAB4]: 	commentbegin	/*	linenum:20
+[DEBUG LAB4]: 	commentelement		linenum:21
+[DEBUG LAB4]: 	commentelement			linenum:21
+[DEBUG LAB4]: 	commentelement			linenum:21
+[DEBUG LAB4]: 	commentelement	C	linenum:21
+[DEBUG LAB4]: 	commentelement	o	linenum:21
+[DEBUG LAB4]: 	commentelement	m	linenum:21
+[DEBUG LAB4]: 	commentelement	m	linenum:21
+[DEBUG LAB4]: 	commentelement	e	linenum:21
+[DEBUG LAB4]: 	commentelement	n	linenum:21
+[DEBUG LAB4]: 	commentelement	t	linenum:21
+[DEBUG LAB4]: 	commentelement	 	linenum:21
+[DEBUG LAB4]: 	commentelement	l	linenum:21
+[DEBUG LAB4]: 	commentelement	i	linenum:21
+[DEBUG LAB4]: 	commentelement	n	linenum:21
+[DEBUG LAB4]: 	commentelement	e	linenum:21
+[DEBUG LAB4]: 	commentelement	s	linenum:21
+[DEBUG LAB4]: 	commentelement	;	linenum:21
+[DEBUG LAB4]: 	commentelement		linenum:22
+[DEBUG LAB4]: 	commentelement			linenum:22
+[DEBUG LAB4]: 	commentend	*/	linenum:22
+[DEBUG LAB4]: 	LBRACE	{	linenum:23
+[DEBUG LAB4]: 	INT	int	linenum:24
+[DEBUG LAB4]: 	ID	a	linenum:24	IDcount:9
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:24
+[DEBUG LAB4]: 	RBRACE	}	linenum:25
+[DEBUG LAB4]: 	LBRACE	{	linenum:26
+[DEBUG LAB4]: 	INT	int	linenum:27
+[DEBUG LAB4]: 	ID	a	linenum:27	IDcount:10
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:27
+[DEBUG LAB4]: 	RBRACE	}	linenum:28
+[DEBUG LAB4]: 	INT	int	linenum:29
+[DEBUG LAB4]: 	ID	b	linenum:29	IDcount:11
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:29
+[DEBUG LAB4]: 	RETURN	return	linenum:30
+[DEBUG LAB4]: 	DECIMIAL	0	linenum:30
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:30
+[DEBUG LAB4]: 	RBRACE	}	linenum:31
+[DEBUG LAB4]: 	commentbegin	/*	linenum:33
+[DEBUG LAB4]: 	commentelement		linenum:34
+[DEBUG LAB4]: 	commentelement			linenum:34
+[DEBUG LAB4]: 	commentelement	C	linenum:34
+[DEBUG LAB4]: 	commentelement	o	linenum:34
+[DEBUG LAB4]: 	commentelement	m	linenum:34
+[DEBUG LAB4]: 	commentelement	m	linenum:34
+[DEBUG LAB4]: 	commentelement	e	linenum:34
+[DEBUG LAB4]: 	commentelement	n	linenum:34
+[DEBUG LAB4]: 	commentelement	t	linenum:34
+[DEBUG LAB4]: 	commentelement	 	linenum:34
+[DEBUG LAB4]: 	commentelement	l	linenum:34
+[DEBUG LAB4]: 	commentelement	i	linenum:34
+[DEBUG LAB4]: 	commentelement	n	linenum:34
+[DEBUG LAB4]: 	commentelement	e	linenum:34
+[DEBUG LAB4]: 	commentelement	s	linenum:34
+[DEBUG LAB4]: 	commentelement	.	linenum:34
+[DEBUG LAB4]: 	commentelement		linenum:35
+[DEBUG LAB4]: 	commentend	*/	linenum:35

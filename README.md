@@ -1,97 +1,15 @@
-# 2022Fall NKUCS Course - Principle of Compilers
+# 2022lab4-Skeleton
+For 2022Fall NKUCS Course - Principle of Compilers Lab4
 
-此仓库为2022年NKU编译原理课程的大作业，构建过程切换分支可见。代码仅供参考。如果你觉得有用，请给我一颗星，非常感谢！
+> Author: Emanual20
+> 
+> Date: 2021/10/16
 
-This repository is the final project for the NKU Compiler Principles course in 2022. The building process can be seen by switching branches. 
+目前使用方式：
 
-The code is provided for reference only. If you find it helpful, please give me a star. Thank you very much!
+- make testlabfour: 编译lexer.l，测试test/lab4下所有sy文件。注意需要解注释ONLY_FOR_LEX宏定义，测试文件要以sy结尾。
+- make cleanlabfour: 清理编译出的二进制文件及测试结果。
 
-## 编译器命令
-```
-Usage：build/compiler [options] infile
-Options:
-    -o <file>   Place the output into <file>.
-    -t          Print tokens.
-    -a          Print abstract syntax tree.
-    -i          Print intermediate code
-    -S          Print assembly code
-```
+目前只给出了lexer.l的框架，parser.y, SymbolTable.\[cpp|h\], Ast.\[cpp|h\], Type.\[cpp|h\] 在下次给出。
 
-## VSCode调试
-
-提供了VSCode调试所需的`json`文件，使用前需正确设置`launch.json`中`miDebuggerPath`中`gdb`的路径。`launch.json`中`args`值即为编译器的参数，可自行调整。
-
-## Makefile使用
-
-* 修改测试路径：
-
-默认测试路径为test，你可以修改为任意要测试的路径。我们已将最终所有测试样例分级上传。
-
-如：要测试level1-1下所有sy文件，可以将makefile中的
-
-```
-TEST_PATH ?= test
-```
-
-修改为
-
-```
-TEST_PATH ?= test/level1-1
-```
-
-* 编译：
-
-```
-    make
-```
-编译出我们的编译器。
-
-* 运行：
-```
-    make run
-```
-以example.sy文件为输入，输出相应的汇编代码到example.s文件中。
-
-* 测试：
-```
-    make testlab7
-```
-该命令会搜索TEST_PATH目录下所有的.sy文件，逐个输入到编译器中，生成相应的汇编代码.s文件。你还可以指定测试目录：
-```
-    make testlab7 TEST_PATH=dirpath
-```
-* 批量测试：
-```
-    make test
-```
-对TEST_PATH目录下的每个.sy文件，编译器将其编译成汇编代码.s文件， 再使用gcc将.s文件汇编成二进制文件后执行， 将得到的输出与标准输出对比， 验证编译器实现的正确性。错误信息描述如下：
-|  错误信息   | 描述  |
-|  ----  | ----  |
-| Compile Timeout  | 编译超时， 可能是编译器实现错误导致， 也可能是源程序过于庞大导致(可调整超时时间) |
-| Compile Error  | 编译错误， 源程序有错误或编译器实现错误 |
-|Assemble Error| 汇编错误， 编译器生成的目标代码不能由gcc正确汇编|
-| Execute Timeout  |执行超时， 可能是编译器生成了错误的目标代码|
-|Execute Error|程序运行时崩溃， 可能原因同Execute Timeout|
-|Wrong Answer|答案错误， 执行程序得到的输出与标准输出不同|
-
-具体的错误信息可在对应的.log文件中查看。
-
-* GCC Assembly Code
-```
-    make gccasm
-```
-使用gcc编译器生成汇编代码。
-
-* 清理:
-```
-    make clean
-```
-清除所有可执行文件和测试输出。
-```
-    make clean-test
-```
-清除所有测试输出。
-```
-    make clean-app
-```
-清除编译器可执行文件。
+学有余力的同学，鼓励一次性完成语法分析(框架见lab5分支)，对理解该过程更具有连贯性。 

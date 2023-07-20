@@ -1,0 +1,30 @@
+[DEBUG LAB4]: 	INT	int	linenum:1
+[DEBUG LAB4]: 	ID	a	linenum:1	IDcount:1
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:1
+[DEBUG LAB4]: 	INT	int	linenum:3
+[DEBUG LAB4]: 	ID	main	linenum:3	IDcount:2
+[DEBUG LAB4]: 	LPAREN	(	linenum:3
+[DEBUG LAB4]: 	RPAREN	)	linenum:3
+[DEBUG LAB4]: 	LBRACE	{	linenum:4
+[DEBUG LAB4]: 	INT	int	linenum:5
+[DEBUG LAB4]: 	ID	a	linenum:5	IDcount:3
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:5
+[DEBUG LAB4]: 	ID	a	linenum:6	IDcount:3
+[DEBUG LAB4]: 	ASSIGN	=	linenum:6
+[DEBUG LAB4]: 	DECIMIAL	1	linenum:6
+[DEBUG LAB4]: 	ADD	+	linenum:6
+[DEBUG LAB4]: 	DECIMIAL	2	linenum:6
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:6
+[DEBUG LAB4]: 	IF	if	linenum:7
+[DEBUG LAB4]: 	LPAREN	(	linenum:7
+[DEBUG LAB4]: 	ID	a	linenum:7	IDcount:3
+[DEBUG LAB4]: 	LESS	<	linenum:7
+[DEBUG LAB4]: 	DECIMIAL	5	linenum:7
+[DEBUG LAB4]: 	RPAREN	)	linenum:7
+[DEBUG LAB4]: 	RETURN	return	linenum:8
+[DEBUG LAB4]: 	DECIMIAL	1	linenum:8
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:8
+[DEBUG LAB4]: 	RETURN	return	linenum:9
+[DEBUG LAB4]: 	DECIMIAL	0	linenum:9
+[DEBUG LAB4]: 	SEMICOLON	;	linenum:9
+[DEBUG LAB4]: 	RBRACE	}	linenum:10
