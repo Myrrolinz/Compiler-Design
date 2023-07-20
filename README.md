@@ -1,10 +1,10 @@
 # 2022Fall NKUCS Course - Principle of Compilers
 
-> Lab7: Machine Code Generation
->
-> Author: Emanual20 YoungCoder feilll shm0214
-> 
-> Date: 2021/11/28 2022/9/30
+此仓库为2022年NKU编译原理课程的大作业，构建过程切换分支可见。代码仅供参考。如果你觉得有用，请给我一颗星，非常感谢！
+
+This repository is the final project for the NKU Compiler Principles course in 2022. The building process can be seen by switching branches. 
+
+The code is provided for reference only. If you find it helpful, please give me a star. Thank you very much!
 
 ## 编译器命令
 ```
