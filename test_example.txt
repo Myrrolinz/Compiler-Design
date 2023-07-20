@@ -1,0 +1,12 @@
+生成文件：
+bison -d yacc.y
+gcc -c yacc.tab.c
+gcc yacc.tab.o -o main
+./main
+
+./ExprCalc
+2+672/4;
+30-3*4;
+
+./Midial2Postfix
+2+A_a2b*(1234-_haha);
